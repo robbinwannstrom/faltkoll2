@@ -119,30 +119,58 @@ export const AccountsView: React.FC<AccountsViewProps> = ({
         return;
       }
 
-      // Check local fallback
+      // Check local fallback (works offline and on GitHub Pages)
       const norm = emailToUse.toLowerCase();
       if (
-        (norm === 'admin@faltkoll.se' || norm === 'admin@skola.se' || norm === 'admin' || norm === 'admin@falthjalp.se') &&
-        (passToUse === 'admin123' || passToUse === 'admin' || passToUse === 'Admin2026!')
+        norm === 'admin@faltkoll.se' ||
+        norm === 'admin@skola.se' ||
+        norm === 'admin' ||
+        norm === 'admin@falthjalp.se'
       ) {
-        const adminUser: UserAccount = {
-          id: 'usr_admin_main',
-          email: 'admin@faltkoll.se',
-          displayName: 'Huvudadministratör (Admin)',
-          role: 'ADMIN',
-          password: passToUse,
-          schoolOrCompany: 'Anläggningsutbildning & Egenkontroll',
-          createdAt: '2026-09-26 10:00',
-          lastLogin: new Date().toISOString().replace('T', ' ').substring(0, 16),
-        };
-        onUserLoggedIn(adminUser);
+        if (passToUse === 'admin123' || passToUse === 'admin' || passToUse === 'Admin2026!') {
+          const adminUser: UserAccount = {
+            id: 'usr_admin_main',
+            email: 'admin@faltkoll.se',
+            displayName: 'Huvudadministratör (Admin)',
+            role: 'ADMIN',
+            password: passToUse,
+            schoolOrCompany: 'Anläggningsutbildning & Egenkontroll',
+            createdAt: '2026-09-26 10:00',
+            lastLogin: new Date().toISOString().replace('T', ' ').substring(0, 16),
+          };
+          onUserLoggedIn(adminUser);
+          try {
+            localStorage.setItem('falthjalp_current_user', JSON.stringify(adminUser));
+          } catch {}
+          setSuccessMsg('Välkommen! Du är nu inloggad som Huvudadministratör.');
+          setTimeout(() => setSuccessMsg(null), 4000);
+          return;
+        }
+      }
+
+      // Check allUsers in state or localStorage for custom admin accounts
+      const localAdmin = allUsers.find(
+        (u) =>
+          u.role === 'ADMIN' &&
+          (u.email.toLowerCase() === norm || u.displayName.toLowerCase() === norm) &&
+          (!u.password || u.password === passToUse)
+      );
+
+      if (localAdmin) {
+        onUserLoggedIn(localAdmin);
         try {
-          localStorage.setItem('falthjalp_current_user', JSON.stringify(adminUser));
+          localStorage.setItem('falthjalp_current_user', JSON.stringify(localAdmin));
         } catch {}
-        setSuccessMsg('Välkommen! Du är nu inloggad som Huvudadministratör.');
+        setSuccessMsg(`Välkommen ${localAdmin.displayName}!`);
         setTimeout(() => setSuccessMsg(null), 4000);
+        return;
+      }
+
+      // Only show error if neither server nor local fallback matched
+      if (res.error && !res.isHtml) {
+        setAdminLoginError(res.error);
       } else {
-        setAdminLoginError(res.error || 'Kunde inte logga in. Kontrollera e-post och lösenord.');
+        setAdminLoginError('Kunde inte logga in. Kontrollera att du angett användarnamn "admin" och lösenord "admin123".');
       }
     } catch (err: any) {
       setAdminLoginError(err.message || 'Kunde inte logga in. Kontrollera e-post och lösenord.');
@@ -361,7 +389,8 @@ export const AccountsView: React.FC<AccountsViewProps> = ({
 
         if (res.ok && res.data?.user?.id) {
           localNewUser.id = res.data.user.id;
-        } else if (!res.ok && res.error) {
+        } else if (!res.ok && !res.isHtml && res.status !== 404 && res.error) {
+          // If server responded with a deliberate JSON error (e.g. email conflict)
           setErrorMsg(res.error);
           setIsCreating(false);
           return;

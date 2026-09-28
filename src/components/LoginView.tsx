@@ -183,8 +183,8 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, onCancel }
         return;
       }
 
-      // If server returned specific invalid password or account error
-      if (!result.ok && result.error) {
+      // If server returned a deliberate JSON error (e.g. wrong password or account does not exist)
+      if (!result.ok && !result.isHtml && result.status !== 404 && result.error) {
         // First check if local credentials match (e.g. offline account)
         const localMatch = findUserLocally(cleanEmail, cleanPass);
         if (localMatch) {
@@ -305,7 +305,8 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, onCancel }
 
       if (result.ok && result.data?.user) {
         newLocalUser.id = result.data.user.id;
-      } else if (!result.ok && result.error) {
+      } else if (!result.ok && !result.isHtml && result.status !== 404 && result.error) {
+        // Legitimate server error (such as email already exists)
         setErrorMsg(result.error);
         setIsLoading(false);
         return;
