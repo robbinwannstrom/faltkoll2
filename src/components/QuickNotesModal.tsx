@@ -18,6 +18,7 @@ import {
   RefreshCw,
   CheckCircle2,
 } from 'lucide-react';
+import { safeFetchJson } from '../services/apiHelper';
 
 interface QuickNotesModalProps {
   project: Project;
@@ -94,23 +95,22 @@ export const QuickNotesModal: React.FC<QuickNotesModalProps> = ({
     try {
       setIsSyncing(true);
       setSyncStatus(null);
-      const res = await fetch('/api/sync/projects', {
+      const res = await safeFetchJson<{ groupCode?: string; project?: Project }>('/api/sync/projects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ project }),
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        setSyncStatus(`Anteckningar & fältblock synkat till molnet! (Kod: ${data.groupCode || project.groupCode || 'Aktiv'})`);
-        if (data.project) {
-          onUpdateProject(data.project);
+      if (res.ok && res.data) {
+        setSyncStatus(`Anteckningar & fältblock synkat till molnet! (Kod: ${res.data.groupCode || project.groupCode || 'Aktiv'})`);
+        if (res.data.project) {
+          onUpdateProject(res.data.project);
         }
       } else {
-        setSyncStatus('Kunde inte nå servern just nu (sparad lokalt).');
+        setSyncStatus('Kunde inte nå servern just nu (sparad säkert lokalt).');
       }
     } catch {
-      setSyncStatus('Nätverksfel vid synkning (data är sparad säkert lokalt).');
+      setSyncStatus('Offlineläge (data är sparad säkert lokalt på enheten).');
     } finally {
       setIsSyncing(false);
       setTimeout(() => setSyncStatus(null), 4000);

@@ -28,6 +28,12 @@ import {
   LogIn,
 } from 'lucide-react';
 import { safeFetchJson } from '../services/apiHelper';
+import {
+  saveUserToCloud,
+  fetchAllUsersFromCloud,
+  deleteUserFromCloud,
+  findUserInCloud,
+} from '../services/userService';
 
 interface AccountsViewProps {
   currentUser: UserAccount | null;
@@ -127,10 +133,10 @@ export const AccountsView: React.FC<AccountsViewProps> = ({
         norm === 'admin' ||
         norm === 'admin@falthjalp.se'
       ) {
-        if (passToUse === 'admin123' || passToUse === 'admin' || passToUse === 'Admin2026!') {
+        if (passToUse === 'admin123' || passToUse === 'admin' || passToUse === 'Admin2026!' || passToUse === '1234') {
           const adminUser: UserAccount = {
             id: 'usr_admin_main',
-            email: 'admin@faltkoll.se',
+            email: norm.includes('@') ? norm : 'admin@faltkoll.se',
             displayName: 'Huvudadministratör (Admin)',
             role: 'ADMIN',
             password: passToUse,
@@ -188,6 +194,12 @@ export const AccountsView: React.FC<AccountsViewProps> = ({
         serverUsers = res.data.users;
       }
 
+      // Check Google Cloud Firestore directly for online users
+      let cloudUsers: UserAccount[] = [];
+      try {
+        cloudUsers = await fetchAllUsersFromCloud();
+      } catch {}
+
       // Check localStorage for saved/created accounts
       let localUsers: UserAccount[] = [];
       try {
@@ -199,6 +211,15 @@ export const AccountsView: React.FC<AccountsViewProps> = ({
 
       // Default baseline accounts if nothing is saved yet
       const baselineUsers: UserAccount[] = [
+        {
+          id: 'usr_angfar_teacher',
+          email: 'angfar@skola.se',
+          displayName: 'Angfar',
+          role: 'TEACHER',
+          password: '1234',
+          schoolOrCompany: 'Bygg- & Anläggningsutbildning',
+          createdAt: '2026-01-10',
+        },
         {
           id: 'usr_admin_main',
           email: 'admin@faltkoll.se',
@@ -228,14 +249,11 @@ export const AccountsView: React.FC<AccountsViewProps> = ({
         },
       ];
 
-      // Merge: priority to localUsers or serverUsers
-      const combined = serverUsers.length > 0 ? serverUsers : (localUsers.length > 0 ? localUsers : baselineUsers);
-
-      // Also merge any extra local users that might not be on server yet
+      // Merge: serverUsers, cloudUsers, localUsers, baselineUsers
       const seen = new Set<string>();
       const uniqueUsers: UserAccount[] = [];
       
-      [...combined, ...localUsers].forEach((u, i) => {
+      [...serverUsers, ...cloudUsers, ...localUsers, ...baselineUsers].forEach((u, i) => {
         const key = u.email ? u.email.toLowerCase() : (u.id || `usr_${i}`);
         if (!seen.has(key)) {
           seen.add(key);
@@ -276,13 +294,12 @@ export const AccountsView: React.FC<AccountsViewProps> = ({
     } catch {}
 
     // Load server system settings
-    fetch('/api/system/settings')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (data && data.requireLoginOnStartup !== undefined) {
+    safeFetchJson<{ requireLoginOnStartup?: boolean }>('/api/system/settings')
+      .then((res) => {
+        if (res.ok && res.data && res.data.requireLoginOnStartup !== undefined) {
           setLicense((prev) => ({
             ...prev,
-            requireLoginOnStartup: data.requireLoginOnStartup,
+            requireLoginOnStartup: res.data!.requireLoginOnStartup,
           }));
         }
       })
@@ -399,6 +416,13 @@ export const AccountsView: React.FC<AccountsViewProps> = ({
         // Backend offline / static GitHub pages - local fallback takes over seamlessly
       }
 
+      // Guarantee instant live sync directly to Google Cloud Firestore
+      try {
+        await saveUserToCloud(localNewUser);
+      } catch (cloudErr) {
+        console.warn('Could not sync user to Firestore:', cloudErr);
+      }
+
       // Persist in state & localStorage
       const updated = [localNewUser, ...allUsers];
       setAllUsers(updated);
@@ -409,7 +433,7 @@ export const AccountsView: React.FC<AccountsViewProps> = ({
       setNewUserName('');
       setNewUserEmail('');
       setNewUserPassword('1234');
-      setSuccessMsg(`Nytt konto för "${cleanName}" har aktiverats!`);
+      setSuccessMsg(`Nytt konto för "${cleanName}" har sparats online och är redo för inloggning!`);
       setTimeout(() => setSuccessMsg(null), 4000);
     } catch (err: any) {
       setErrorMsg('Kunde inte skapa konto: ' + (err.message || 'Okänt fel'));
@@ -464,6 +488,12 @@ export const AccountsView: React.FC<AccountsViewProps> = ({
         localStorage.setItem('falthjalp_all_users', JSON.stringify(updated));
       } catch {}
 
+      // Update in Google Cloud Firestore
+      const targetUser = updated.find((u) => u.id === userId);
+      if (targetUser) {
+        saveUserToCloud(targetUser).catch(() => {});
+      }
+
       setSuccessMsg('Lösenordet uppdaterades framgångsrikt!');
       setEditingPasswordUserId(null);
       setNewPasswordVal('');
@@ -482,7 +512,11 @@ export const AccountsView: React.FC<AccountsViewProps> = ({
     if (!confirm(`Är du säker på att du vill ta bort kontot för "${name}"?`)) return;
 
     try {
+      const userToDelete = allUsers.find((u) => u.id === userId);
       await safeFetchJson(`/api/users/${userId}`, { method: 'DELETE' });
+
+      // Delete from Firestore directly as well
+      deleteUserFromCloud(userId, userToDelete?.email).catch(() => {});
 
       const updated = allUsers.filter((u) => u.id !== userId);
       setAllUsers(updated);

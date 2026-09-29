@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { MomentDefinition } from '../types';
 import { getSmartAiSuggestionsForMoment, MomentAiQuestionItem } from '../data/momentAiSuggestions';
+import { safeFetchJson } from '../services/apiHelper';
 import {
   Bot,
   X,
@@ -55,7 +56,7 @@ export const MomentAiHelperModal: React.FC<MomentAiHelperModalProps> = ({
     // Call server Gemini to enrich if online
     try {
       setIsLoading(true);
-      const res = await fetch('/api/gemini-ask', {
+      const res = await safeFetchJson<{ answer?: string }>('/api/gemini-ask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -70,12 +71,9 @@ export const MomentAiHelperModal: React.FC<MomentAiHelperModalProps> = ({
         })
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data.answer) {
-          setActiveAnswer(data.answer);
-          setIsAiGenerated(true);
-        }
+      if (res.ok && res.data?.answer) {
+        setActiveAnswer(res.data.answer);
+        setIsAiGenerated(true);
       }
     } catch {
       // Keep instantAnswer if offline
@@ -102,7 +100,7 @@ export const MomentAiHelperModal: React.FC<MomentAiHelperModalProps> = ({
     }
 
     try {
-      const res = await fetch('/api/gemini-ask', {
+      const res = await safeFetchJson<{ answer?: string }>('/api/gemini-ask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -117,12 +115,9 @@ export const MomentAiHelperModal: React.FC<MomentAiHelperModalProps> = ({
         })
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data.answer) {
-          setActiveAnswer(data.answer);
-          setIsAiGenerated(true);
-        }
+      if (res.ok && res.data?.answer) {
+        setActiveAnswer(res.data.answer);
+        setIsAiGenerated(true);
       } else {
         if (!activeAnswer) {
           setActiveAnswer(

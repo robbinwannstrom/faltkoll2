@@ -1,0 +1,76 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User account for student, teacher, or admin",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["STUDENT", "TEACHER", "ADMIN"] },
+        "password": { "type": "string" },
+        "schoolOrCompany": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "lastLogin": { "type": "string" }
+      },
+      "required": ["id", "email", "displayName", "role"]
+    },
+    "Project": {
+      "title": "Project",
+      "description": "Construction ground project",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "projectType": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    },
+    "Exercise": {
+      "title": "Exercise",
+      "description": "Teacher created field exercise",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "code": { "type": "string" }
+      },
+      "required": ["id", "title"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "System or teacher broadcast notification",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" }
+      },
+      "required": ["id", "title", "message"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User accounts"
+    },
+    "/projects/{projectId}": {
+      "schema": "Project",
+      "description": "Shared projects"
+    },
+    "/exercises/{exerciseId}": {
+      "schema": "Exercise",
+      "description": "Teacher exercises"
+    },
+    "/notifications/{notificationId}": {
+      "schema": "Notification",
+      "description": "System notices"
+    },
+    "/system/{settingId}": {
+      "schema": "User",
+      "description": "System settings"
+    }
+  }
+}

@@ -1,6 +1,36 @@
 {
   "users": [
     {
+      "id": "usr_1790725123408_pqio",
+      "email": "erik.bygg@skola.se",
+      "displayName": "Erik Svensson",
+      "role": "STUDENT",
+      "password": "hemligt123",
+      "schoolOrCompany": "Bygg & Anläggning",
+      "createdAt": "2026-09-29 23:38",
+      "lastLogin": "2026-09-29 23:38"
+    },
+    {
+      "id": "usr_angfar_teacher",
+      "email": "angfar@skola.se",
+      "displayName": "Angfar",
+      "role": "TEACHER",
+      "password": "1234",
+      "schoolOrCompany": "Bygg- & Anläggningsutbildning",
+      "createdAt": "2026-09-29 08:00",
+      "lastLogin": "2026-09-29 23:38"
+    },
+    {
+      "id": "usr_admin_skola",
+      "email": "admin@faltkoll.se",
+      "displayName": "Administratör",
+      "role": "ADMIN",
+      "password": "admin123",
+      "schoolOrCompany": "Bygg- & Anläggningsutbildning",
+      "createdAt": "2026-09-29 08:00",
+      "lastLogin": "2026-09-29 10:50"
+    },
+    {
       "id": "usr_1790594250865_0wxq",
       "email": "johan.elev@skola.se",
       "displayName": "Johan Elev",
@@ -68,6 +98,16 @@
       "schoolOrCompany": "Anläggningssektionen",
       "createdAt": "2026-01-01 08:00",
       "lastLogin": "2026-09-24 12:00"
+    },
+    {
+      "id": "usr_admin_skola",
+      "email": "admin@skola.se",
+      "displayName": "Administratör (Skola)",
+      "role": "ADMIN",
+      "password": "admin123",
+      "schoolOrCompany": "Bygg- & Anläggningsutbildning",
+      "createdAt": "2026-01-01 08:00",
+      "lastLogin": "2026-09-29 08:00"
     }
   ],
   "notifications": [

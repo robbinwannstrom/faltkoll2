@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { FIELD_PROBLEMS_DB, FieldProblemItem } from '../data/fieldProblemsData';
+import { safeFetchJson } from '../services/apiHelper';
 import {
   HelpCircle,
   Search,
@@ -72,7 +73,7 @@ export const FieldHelperModal: React.FC<FieldHelperModalProps> = ({
       setIsLoadingAi(true);
       setAiAnswer(null);
 
-      const res = await fetch('/api/gemini-ask', {
+      const res = await safeFetchJson<{ answer?: string }>('/api/gemini-ask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -82,12 +83,11 @@ export const FieldHelperModal: React.FC<FieldHelperModalProps> = ({
         }),
       });
 
-      if (!res.ok) {
-        throw new Error('Server svarade med status ' + res.status);
+      if (!res.ok || !res.data) {
+        throw new Error(res.error || 'Server svarade inte med data');
       }
 
-      const data = await res.json();
-      setAiAnswer(data.answer || 'Inget svar erhölls.');
+      setAiAnswer(res.data.answer || 'Inget svar erhölls.');
     } catch (err: any) {
       // Local fallback if server/offline
       const matched = FIELD_PROBLEMS_DB.find((p) =>
