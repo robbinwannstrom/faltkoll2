@@ -20,6 +20,7 @@ import {
   Plus,
   Home,
   Check,
+  BookOpen,
 } from 'lucide-react';
 
 interface NavigationMenuModalProps {
@@ -31,6 +32,7 @@ interface NavigationMenuModalProps {
   onOpenTrashBin: () => void;
   onOpenNotices: () => void;
   onOpenAccounts: () => void;
+  onOpenExerciseCreator?: () => void;
   onOpenAPKExport?: () => void;
   onOpenQRCodeModal?: () => void;
   onOpenRevisions?: () => void;
@@ -58,6 +60,7 @@ export const NavigationMenuModal: React.FC<NavigationMenuModalProps> = ({
   onOpenTrashBin,
   onOpenNotices,
   onOpenAccounts,
+  onOpenExerciseCreator,
   onOpenQRCodeModal,
   onOpenRevisions,
   onOpenTutorial,
@@ -156,6 +159,35 @@ export const NavigationMenuModal: React.FC<NavigationMenuModalProps> = ({
             )
           )}
         </div>
+
+        {/* Lärarpanel: Övningskreatör Direktåtkomst */}
+        {(currentUser?.role === 'TEACHER' || currentUser?.role === 'ADMIN') && onOpenExerciseCreator && (
+          <div className="px-3 pt-1">
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onOpenExerciseCreator();
+              }}
+              className="w-full p-3 rounded-2xl bg-amber-500/15 hover:bg-amber-500/25 border-2 border-amber-500/40 text-left flex items-center gap-3 transition-all cursor-pointer group shadow-md"
+            >
+              <div className="w-10 h-10 rounded-xl bg-amber-500 text-black flex items-center justify-center shrink-0 font-black shadow-sm">
+                <BookOpen className="w-5 h-5 stroke-[2.5]" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="font-black text-sm text-white group-hover:text-amber-300 flex items-center justify-between">
+                  <span>Övningskreatör</span>
+                  <span className="text-[10px] bg-amber-950 text-amber-300 border border-amber-800 px-1.5 py-0.2 rounded-md font-bold uppercase">
+                    Lärare
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-300 leading-snug mt-0.5">
+                  Skapa nya elevövningar från mallar eller från scratch.
+                </p>
+              </div>
+            </button>
+          </div>
+        )}
 
         {/* Scrollable Menu Items */}
         <div className="p-3 space-y-5 flex-1 overflow-y-auto">

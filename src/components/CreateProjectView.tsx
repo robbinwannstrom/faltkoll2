@@ -1,8 +1,29 @@
-import React, { useState } from 'react';
-import { ProjectType, UserSettings } from '../types';
+import React, { useState, useEffect } from 'react';
+import { ProjectType, UserSettings, UserAccount, TeacherExercise } from '../types';
 import { PROJECT_TYPE_LABELS } from '../data/momentsData';
 import { initializeNewProject } from '../db/indexedDb';
-import { HardHat, ArrowLeft, Check, AlertCircle, ShieldCheck, AlertTriangle } from 'lucide-react';
+import {
+  HardHat,
+  ArrowLeft,
+  Check,
+  AlertCircle,
+  ShieldCheck,
+  AlertTriangle,
+  BookOpen,
+  Search,
+  Filter,
+  Users,
+  Play,
+  Key,
+  Layers,
+  Sparkles,
+} from 'lucide-react';
+import {
+  fetchTeacherExercises,
+  fetchExerciseByCode,
+  convertExerciseToProject,
+} from '../services/exerciseService';
+import { STANDARD_STUDENT_GROUPS } from '../services/userService';
 
 interface CreateProjectViewProps {
   onCancel: () => void;
@@ -10,6 +31,8 @@ interface CreateProjectViewProps {
   onSaveNewProject: (project: any) => Promise<void>;
   defaultType?: ProjectType;
   userSettings?: UserSettings;
+  currentUser?: UserAccount | null;
+  onStartExerciseProject?: (exercise: TeacherExercise) => void;
 }
 
 export const CreateProjectView: React.FC<CreateProjectViewProps> = ({
@@ -18,12 +41,23 @@ export const CreateProjectView: React.FC<CreateProjectViewProps> = ({
   onSaveNewProject,
   defaultType,
   userSettings,
+  currentUser,
+  onStartExerciseProject,
 }) => {
+  const [creationMode, setCreationMode] = useState<'TEACHER_EXERCISE' | 'STANDARD_TEMPLATE'>('TEACHER_EXERCISE');
+  const [exercises, setExercises] = useState<TeacherExercise[]>([]);
+  const [loadingExercises, setLoadingExercises] = useState(false);
+  const [exerciseSearch, setExerciseSearch] = useState('');
+  const [groupFilter, setGroupFilter] = useState('ALL');
+  const [directCode, setDirectCode] = useState('');
+  const [codeLookupError, setCodeLookupError] = useState<string | null>(null);
+  const [isStartingExercise, setIsStartingExercise] = useState(false);
+
   const [name, setName] = useState('');
   const [projectType, setProjectType] = useState<ProjectType>(defaultType || 'HUSGRUND');
   const [propertyDesignation, setPropertyDesignation] = useState('');
   const [clientName, setClientName] = useState('');
-  const [contractorName, setContractorName] = useState('');
+  const [contractorName, setContractorName] = useState(currentUser?.displayName || '');
   const [projectNumber, setProjectNumber] = useState('');
   const [applicableDocs, setApplicableDocs] = useState('Bygghandling M30-1-01, M-10.1-01, AMA Anläggning 20');
   const [notes, setNotes] = useState('');
@@ -37,6 +71,81 @@ export const CreateProjectView: React.FC<CreateProjectViewProps> = ({
   const [preInspectionChoice, setPreInspectionChoice] = useState<'DO' | 'SKIP'>(
     userSettings?.preInspectionPreference === 'SKIP_DEFAULT' ? 'SKIP' : 'DO'
   );
+
+  useEffect(() => {
+    const loadExercises = async () => {
+      setLoadingExercises(true);
+      try {
+        const list = await fetchTeacherExercises();
+        setExercises(list);
+        if (currentUser?.studentGroup && list.some((e) => e.targetGroup === currentUser.studentGroup)) {
+          setGroupFilter(currentUser.studentGroup);
+        }
+      } catch {
+        // Fallback
+      } finally {
+        setLoadingExercises(false);
+      }
+    };
+    loadExercises();
+  }, [currentUser]);
+
+  const handleStartExercise = async (exercise: TeacherExercise) => {
+    try {
+      setIsStartingExercise(true);
+      if (onStartExerciseProject) {
+        onStartExerciseProject(exercise);
+        return;
+      }
+      const newProj = convertExerciseToProject(
+        exercise,
+        currentUser?.displayName || userSettings?.userName || 'Elev / Lärling'
+      );
+      await onSaveNewProject(newProj);
+      onProjectCreated(newProj.id);
+    } catch (err: any) {
+      setError(err?.message || 'Kunde inte starta övningen.');
+      setIsStartingExercise(false);
+    }
+  };
+
+  const handleLookupCodeAndStart = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCodeLookupError(null);
+    const cleanCode = directCode.trim().toUpperCase();
+    if (!cleanCode) {
+      setCodeLookupError('Vänligen ange en övningskod (t.ex. GRUND-1)');
+      return;
+    }
+
+    try {
+      setIsStartingExercise(true);
+      const ex = await fetchExerciseByCode(cleanCode);
+      if (!ex) {
+        setCodeLookupError(`Ingen övning hittades med koden "${cleanCode}". Kontrollera koden med din lärare.`);
+        setIsStartingExercise(false);
+        return;
+      }
+      await handleStartExercise(ex);
+    } catch {
+      setCodeLookupError('Ett fel uppstod vid hämtning av övningen.');
+      setIsStartingExercise(false);
+    }
+  };
+
+  const filteredExercises = exercises.filter((ex) => {
+    const matchesGroup =
+      groupFilter === 'ALL' ||
+      ex.targetGroup === groupFilter ||
+      ex.targetGroup === 'Alla grupper' ||
+      !ex.targetGroup;
+    const matchesSearch =
+      ex.title.toLowerCase().includes(exerciseSearch.toLowerCase()) ||
+      ex.code.toLowerCase().includes(exerciseSearch.toLowerCase()) ||
+      (ex.description && ex.description.toLowerCase().includes(exerciseSearch.toLowerCase())) ||
+      (ex.createdByTeacherName && ex.createdByTeacherName.toLowerCase().includes(exerciseSearch.toLowerCase()));
+    return matchesGroup && matchesSearch;
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -92,11 +201,239 @@ export const CreateProjectView: React.FC<CreateProjectViewProps> = ({
           <ArrowLeft className="w-4 h-4 text-slate-400" />
           <span>Tillbaka</span>
         </button>
-        <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
-          Skapa nytt projekt
-        </h2>
+        <div>
+          <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
+            Starta ny skolövning
+          </h2>
+          <p className="text-xs text-slate-400">
+            Välj en anpassad övning från din lärare eller starta från en standardmall.
+          </p>
+        </div>
       </div>
 
+      {/* Mode selection tabs */}
+      <div className="grid grid-cols-2 gap-2 p-1.5 bg-[#141414] rounded-2xl border border-[#282828]">
+        <button
+          type="button"
+          onClick={() => setCreationMode('TEACHER_EXERCISE')}
+          className={`min-h-[44px] px-3 rounded-xl text-xs sm:text-sm font-black flex items-center justify-center gap-2 transition-all cursor-pointer ${
+            creationMode === 'TEACHER_EXERCISE'
+              ? 'bg-orange-500 text-black shadow-md shadow-orange-500/20'
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <BookOpen className="w-4 h-4 stroke-[2.5]" />
+          <span>Övning från läraren</span>
+          {exercises.length > 0 && (
+            <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+              creationMode === 'TEACHER_EXERCISE' ? 'bg-black text-orange-400' : 'bg-[#222] text-slate-300'
+            }`}>
+              {exercises.length}
+            </span>
+          )}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setCreationMode('STANDARD_TEMPLATE')}
+          className={`min-h-[44px] px-3 rounded-xl text-xs sm:text-sm font-black flex items-center justify-center gap-2 transition-all cursor-pointer ${
+            creationMode === 'STANDARD_TEMPLATE'
+              ? 'bg-orange-500 text-black shadow-md shadow-orange-500/20'
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <HardHat className="w-4 h-4 stroke-[2.5]" />
+          <span>Standardmall / Eget projekt</span>
+        </button>
+      </div>
+
+      {/* ================= TEACHER EXERCISES VIEW ================= */}
+      {creationMode === 'TEACHER_EXERCISE' && (
+        <div className="space-y-5">
+          {/* Snabbinmatning av övningskod */}
+          <div className="bg-[#181818] border-2 border-orange-500/40 rounded-3xl p-5 space-y-3 shadow-xl">
+            <div className="flex items-center gap-2 text-orange-400 font-bold text-xs uppercase tracking-wider">
+              <Key className="w-4 h-4" />
+              <span>Har du fått en övningskod av läraren?</span>
+            </div>
+
+            <form onSubmit={handleLookupCodeAndStart} className="flex flex-col sm:flex-row gap-2">
+              <input
+                type="text"
+                value={directCode}
+                onChange={(e) => {
+                  setDirectCode(e.target.value.toUpperCase());
+                  setCodeLookupError(null);
+                }}
+                placeholder="T.ex. GRUND-1, PLATTA-2 eller ÖVN-101"
+                className="flex-1 min-h-[46px] px-4 bg-[#101010] border border-[#333333] focus:border-orange-500 rounded-xl text-white font-mono font-bold text-sm uppercase placeholder:text-slate-500 outline-none"
+              />
+              <button
+                type="submit"
+                disabled={isStartingExercise}
+                className="min-h-[46px] px-5 bg-orange-500 hover:bg-orange-400 active:scale-95 text-black font-black text-xs sm:text-sm rounded-xl flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-orange-500/20 transition-all shrink-0"
+              >
+                <Play className="w-4 h-4 fill-black" />
+                <span>{isStartingExercise ? 'Laddar övning...' : 'Hämta & starta'}</span>
+              </button>
+            </form>
+
+            {codeLookupError && (
+              <div className="text-xs text-rose-400 font-medium flex items-center gap-1.5 pt-1">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{codeLookupError}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Sök & Gruppfilter */}
+          <div className="bg-[#181818] border border-[#2c2c2c] rounded-3xl p-5 space-y-4 shadow-xl">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#262626] pb-3">
+              <div>
+                <h3 className="font-black text-white text-base sm:text-lg">
+                  Tillgängliga övningar ({filteredExercises.length})
+                </h3>
+                <p className="text-xs text-slate-400">
+                  Välj en övning nedan för att starta din egenkontroll direkt.
+                </p>
+              </div>
+
+              {/* Sökfält */}
+              <div className="relative min-w-[200px]">
+                <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={exerciseSearch}
+                  onChange={(e) => setExerciseSearch(e.target.value)}
+                  placeholder="Sök övning eller kod..."
+                  className="w-full min-h-[38px] pl-9 pr-3 bg-[#121212] border border-[#333333] focus:border-orange-500 rounded-xl text-xs text-white placeholder-slate-500 outline-none"
+                />
+              </div>
+            </div>
+
+            {/* Gruppchips */}
+            <div className="space-y-1.5">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
+                Filtrera efter utbildningsprogram:
+              </span>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setGroupFilter('ALL')}
+                  className={`px-3 py-1 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
+                    groupFilter === 'ALL'
+                      ? 'bg-orange-500 text-black border-orange-400 font-black'
+                      : 'bg-[#121212] text-slate-400 border-[#2c2c2c] hover:text-white'
+                  }`}
+                >
+                  Alla grupper ({exercises.length})
+                </button>
+                {STANDARD_STUDENT_GROUPS.map((g) => {
+                  const count = exercises.filter(
+                    (e) => e.targetGroup === g || e.targetGroup === 'Alla grupper' || !e.targetGroup
+                  ).length;
+                  return (
+                    <button
+                      key={g}
+                      type="button"
+                      onClick={() => setGroupFilter(g)}
+                      className={`px-3 py-1 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
+                        groupFilter === g
+                          ? 'bg-orange-500 text-black border-orange-400 font-black'
+                          : 'bg-[#121212] text-slate-400 border-[#2c2c2c] hover:text-white'
+                      }`}
+                    >
+                      {g} ({count})
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Övningskort */}
+            <div className="grid grid-cols-1 gap-3 pt-2">
+              {loadingExercises ? (
+                <div className="p-8 text-center text-slate-400 text-xs">
+                  Laddar övningar från skolans molndatabas...
+                </div>
+              ) : filteredExercises.length === 0 ? (
+                <div className="p-8 text-center bg-[#121212] rounded-2xl border border-dashed border-[#282828] text-slate-500 space-y-1 text-xs">
+                  <p className="font-bold text-slate-300">Inga övningar matchade ditt filter.</p>
+                  <p>Välj "Alla grupper" eller be din lärare skapa en ny övning.</p>
+                </div>
+              ) : (
+                filteredExercises.map((ex) => (
+                  <div
+                    key={ex.id}
+                    className="p-4 rounded-2xl bg-[#121212] border border-[#2c2c2c] hover:border-orange-500/60 transition-all space-y-3"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#222222] pb-3">
+                      <div className="space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <code className="px-2 py-0.5 bg-orange-950 text-orange-400 font-mono font-black text-xs rounded-md border border-orange-800">
+                            {ex.code}
+                          </code>
+                          <span className="text-[10px] font-bold bg-[#1e1e1e] text-slate-300 border border-[#333] px-2 py-0.5 rounded-full">
+                            {ex.targetGroup || 'Byggprogrammet'}
+                          </span>
+                          <span className="text-[10px] font-bold bg-amber-950 text-amber-300 border border-amber-800 px-2 py-0.5 rounded-full">
+                            {ex.difficulty || 'MEDEL'}
+                          </span>
+                          <span className="text-[10px] font-bold bg-sky-950 text-sky-300 border border-sky-800 px-2 py-0.5 rounded-full">
+                            {ex.customMoments?.length || 8} kontrollmoment
+                          </span>
+                        </div>
+                        <h4 className="font-black text-white text-base">
+                          {ex.title}
+                        </h4>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleStartExercise(ex)}
+                        disabled={isStartingExercise}
+                        className="min-h-[42px] px-4 bg-orange-500 hover:bg-orange-400 active:scale-95 text-black font-black text-xs rounded-xl flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-orange-500/20 transition-all shrink-0"
+                      >
+                        <Play className="w-3.5 h-3.5 fill-black" />
+                        <span>Starta denna övning</span>
+                      </button>
+                    </div>
+
+                    {ex.description && (
+                      <p className="text-xs text-slate-300 leading-relaxed">
+                        {ex.description}
+                      </p>
+                    )}
+
+                    {ex.fieldMeasurements && (ex.fieldMeasurements.sideA || ex.fieldMeasurements.fallCmPerM) && (
+                      <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-400 bg-[#161616] p-2 rounded-xl border border-[#242424]">
+                        {ex.fieldMeasurements.sideA && ex.fieldMeasurements.sideB && (
+                          <span>
+                            📐 Mått: <strong>{ex.fieldMeasurements.sideA} × {ex.fieldMeasurements.sideB} m</strong>
+                          </span>
+                        )}
+                        {ex.fieldMeasurements.fallCmPerM && (
+                          <span>
+                            💧 Fall: <strong>{ex.fieldMeasurements.fallCmPerM} cm/m</strong>
+                          </span>
+                        )}
+                        {ex.createdByTeacherName && (
+                          <span>
+                            👨‍🏫 Skapad av: <strong>{ex.createdByTeacherName}</strong>
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= STANDARD TEMPLATE FORM ================= */}
+      {creationMode === 'STANDARD_TEMPLATE' && (
       <form onSubmit={handleSubmit} className="space-y-5">
         {/* Error notification */}
         {error && (
@@ -424,6 +761,7 @@ export const CreateProjectView: React.FC<CreateProjectViewProps> = ({
           </button>
         </div>
       </form>
+      )}
     </div>
   );
 };

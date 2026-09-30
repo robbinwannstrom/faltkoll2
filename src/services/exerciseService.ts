@@ -2,6 +2,11 @@ import { TeacherExercise, Project, MomentRecord, MomentDefinition } from '../typ
 import { ALL_MOMENTS } from '../data/momentsData';
 import { getFormattedCurrentTime } from '../db/indexedDb';
 import { safeFetchJson } from './apiHelper';
+import {
+  saveExerciseToCloud,
+  fetchAllExercisesFromCloud,
+  deleteExerciseFromCloud,
+} from './userService';
 
 const LOCAL_EXERCISES_KEY = 'faltkoll_custom_exercises';
 const LOCAL_ADMIN_SETTINGS_KEY = 'faltkoll_admin_settings';
@@ -90,21 +95,38 @@ export const saveLocalExercises = (list: TeacherExercise[]): void => {
   } catch {}
 };
 
-// Fetch all exercises from server (with offline fallback)
+// Fetch all exercises from server & Cloud Firestore (with offline fallback)
 export const fetchTeacherExercises = async (): Promise<TeacherExercise[]> => {
+  let serverExercises: TeacherExercise[] = [];
   try {
     const res = await safeFetchJson<{ exercises: TeacherExercise[] }>('/api/exercises');
     if (res.ok && Array.isArray(res.data?.exercises)) {
-      if (res.data.exercises.length === 0) {
-        // If server is empty, seed defaults
-        saveLocalExercises(DEFAULT_EXERCISES);
-        return DEFAULT_EXERCISES;
-      }
-      saveLocalExercises(res.data.exercises);
-      return res.data.exercises;
+      serverExercises = res.data.exercises;
     }
   } catch {}
-  return getLocalExercises();
+
+  // Fetch from Google Cloud Firestore directly
+  let cloudExercises: TeacherExercise[] = [];
+  try {
+    cloudExercises = await fetchAllExercisesFromCloud();
+  } catch {}
+
+  const localExercises = getLocalExercises();
+
+  // Combine and de-duplicate by ID and Code
+  const seen = new Set<string>();
+  const combined: TeacherExercise[] = [];
+
+  for (const ex of [...cloudExercises, ...serverExercises, ...localExercises, ...DEFAULT_EXERCISES]) {
+    const key = (ex.id || ex.code || '').trim().toLowerCase();
+    if (key && !seen.has(key)) {
+      seen.add(key);
+      combined.push(ex);
+    }
+  }
+
+  saveLocalExercises(combined);
+  return combined;
 };
 
 // Lookup exercise by code
@@ -119,8 +141,8 @@ export const fetchExerciseByCode = async (code: string): Promise<TeacherExercise
     }
   } catch {}
 
-  // Fallback to local storage
-  const localList = getLocalExercises();
+  // Fallback to local storage or Cloud
+  const localList = await fetchTeacherExercises();
   const match = localList.find((e) => e.code.trim().toUpperCase() === cleanCode);
   return match || null;
 };
@@ -141,6 +163,13 @@ export const saveTeacherExercise = async (
     }
   } catch {}
 
+  // Save directly to Google Cloud Firestore
+  try {
+    await saveExerciseToCloud(saved);
+  } catch (err) {
+    console.warn('Could not save exercise to Firestore:', err);
+  }
+
   // Update local storage
   const current = getLocalExercises();
   const idx = current.findIndex((e) => e.id === saved.id || e.code === saved.code);
@@ -156,9 +185,14 @@ export const saveTeacherExercise = async (
 };
 
 // Delete exercise
-export const deleteTeacherExercise = async (id: string): Promise<boolean> => {
+export const deleteTeacherExercise = async (id: string, code?: string): Promise<boolean> => {
   try {
     await safeFetchJson(`/api/exercises/${id}`, { method: 'DELETE' });
+  } catch {}
+
+  // Delete from Google Cloud Firestore
+  try {
+    await deleteExerciseFromCloud(id, code);
   } catch {}
 
   const current = getLocalExercises();

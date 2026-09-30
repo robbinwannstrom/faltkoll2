@@ -47,6 +47,7 @@ interface StoredUser {
   role: 'STUDENT' | 'TEACHER' | 'ADMIN';
   password?: string;
   schoolOrCompany?: string;
+  studentGroup?: string;
   createdAt: string;
   lastLogin?: string;
 }
@@ -552,7 +553,7 @@ app.get('/api/users', async (req, res) => {
 
 // POST /api/users - Create new student/teacher/admin account (Admin or Teacher)
 app.post('/api/users', async (req, res) => {
-  const { email, displayName, role, password, schoolOrCompany } = req.body;
+  const { email, displayName, role, password, schoolOrCompany, studentGroup } = req.body;
 
   if (!email || !displayName) {
     return res.status(400).json({ error: 'E-post/användarnamn och namn krävs.' });
@@ -579,6 +580,7 @@ app.post('/api/users', async (req, res) => {
     role: role === 'TEACHER' || role === 'ADMIN' ? role : 'STUDENT',
     password: password ? String(password).trim() : '1234',
     schoolOrCompany: schoolOrCompany || 'Bygg & Anläggningsutbildning',
+    studentGroup: studentGroup ? String(studentGroup).trim() : 'Byggprogrammet (BA)',
     createdAt: now,
     lastLogin: 'Aldrig inloggad',
   };
@@ -596,10 +598,10 @@ app.post('/api/users', async (req, res) => {
   return res.json({ user: newUser });
 });
 
-// PUT /api/users/:id - Update user role, details or password
+// PUT /api/users/:id - Update user role, details, studentGroup or password
 app.put('/api/users/:id', async (req, res) => {
   const { id } = req.params;
-  const { role, displayName, schoolOrCompany, password } = req.body;
+  const { role, displayName, email, schoolOrCompany, password, studentGroup } = req.body;
 
   const user = cloudState.users.find((u) => u.id === id);
   if (!user) {
@@ -607,8 +609,10 @@ app.put('/api/users/:id', async (req, res) => {
   }
 
   if (role) user.role = role;
-  if (displayName) user.displayName = displayName;
+  if (displayName) user.displayName = String(displayName).trim();
+  if (email) user.email = String(email).trim().toLowerCase();
   if (schoolOrCompany !== undefined) user.schoolOrCompany = schoolOrCompany;
+  if (studentGroup !== undefined) user.studentGroup = String(studentGroup).trim();
   if (password) user.password = String(password).trim();
 
   saveStorage(cloudState);

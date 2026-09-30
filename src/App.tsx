@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Project, ViewState, UserSettings, ProjectType, MomentPhoto, UserAccount } from './types';
+import { Project, ViewState, UserSettings, ProjectType, MomentPhoto, UserAccount, TeacherExercise } from './types';
 import {
   getAllProjects,
   saveProject,
@@ -32,6 +32,8 @@ import { ProjectRevisionsModal } from './components/ProjectRevisionsModal';
 import { MobileInstallModal } from './components/MobileInstallModal';
 import { LoginView } from './components/LoginView';
 import { SettingsModal } from './components/SettingsModal';
+import { TeacherExerciseCreatorModal } from './components/TeacherExerciseCreatorModal';
+import { convertExerciseToProject } from './services/exerciseService';
 
 export default function App() {
   const [view, setView] = useState<ViewState>('DASHBOARD');
@@ -54,6 +56,7 @@ export default function App() {
   const [isNoticesOpen, setIsNoticesOpen] = useState(false);
   const [isRevisionsOpen, setIsRevisionsOpen] = useState(false);
   const [isMobileInstallOpen, setIsMobileInstallOpen] = useState(false);
+  const [isExerciseCreatorOpen, setIsExerciseCreatorOpen] = useState(false);
   const [lightboxPhoto, setLightboxPhoto] = useState<{ url: string; title: string } | null>(null);
 
   const [userSettings, setUserSettings] = useState<UserSettings>(getUserSettings());
@@ -248,6 +251,19 @@ export default function App() {
     await handleUpdateProject(updatedProj);
   };
 
+  const handleStartExerciseProject = async (exercise: TeacherExercise) => {
+    const newProj = convertExerciseToProject(
+      exercise,
+      currentUser?.displayName || userSettings.userName || 'Elev / Lärling'
+    );
+    await saveProject(newProj);
+    const updated = await getAllProjects();
+    setProjects(updated);
+    setActiveProjectId(newProj.id);
+    setView('CHECKLIST');
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  };
+
   const handleProjectImported = async (imported: Project) => {
     await loadProjectsFromDB();
     setActiveProjectId(imported.id);
@@ -343,6 +359,10 @@ export default function App() {
                   if (projId) setActiveProjectId(projId);
                   handleOpenToolWithProject('TUTORIAL');
                 }}
+                onOpenExerciseCreator={() => setIsExerciseCreatorOpen(true)}
+                onOpenAccounts={() => setView('ACCOUNTS')}
+                onOpenAPKExport={() => setView('APK_EXPORT')}
+                currentUser={currentUser}
                 userSettings={userSettings}
               />
             )}
@@ -351,6 +371,8 @@ export default function App() {
               <CreateProjectView
                 onCancel={() => setView('DASHBOARD')}
                 userSettings={userSettings}
+                currentUser={currentUser}
+                onStartExerciseProject={handleStartExerciseProject}
                 onProjectCreated={(newId) => {
                   setActiveProjectId(newId);
                   setView('CHECKLIST');
@@ -382,6 +404,7 @@ export default function App() {
                 onUserLoggedIn={handleUserLogin}
                 onUserLoggedOut={handleUserLogout}
                 onBack={() => setView('DASHBOARD')}
+                onStartExerciseProject={handleStartExerciseProject}
               />
             )}
 
@@ -407,6 +430,10 @@ export default function App() {
         onOpenAccounts={() => {
           setIsNavMenuOpen(false);
           setView('ACCOUNTS');
+        }}
+        onOpenExerciseCreator={() => {
+          setIsNavMenuOpen(false);
+          setIsExerciseCreatorOpen(true);
         }}
         onOpenAPKExport={() => {
           setIsNavMenuOpen(false);
@@ -602,6 +629,14 @@ export default function App() {
       <MobileInstallModal
         isOpen={isMobileInstallOpen}
         onClose={() => setIsMobileInstallOpen(false)}
+      />
+
+      {/* Lärarpanel: Övningskreatör Modal */}
+      <TeacherExerciseCreatorModal
+        isOpen={isExerciseCreatorOpen}
+        onClose={() => setIsExerciseCreatorOpen(false)}
+        currentUser={currentUser}
+        onStartExerciseProject={handleStartExerciseProject}
       />
     </div>
   );

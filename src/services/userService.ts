@@ -10,9 +10,52 @@ import {
   limit,
 } from 'firebase/firestore';
 import { db } from '../firebase';
-import { UserAccount } from '../types';
+import { UserAccount, TeacherExercise } from '../types';
 
 const USERS_COLLECTION = 'users';
+const EXERCISES_COLLECTION = 'exercises';
+
+export const STANDARD_STUDENT_GROUPS = [
+  'Byggprogrammet (BA)',
+  'Anläggning & Maskin',
+  'Vuxenutbildning (VUX)',
+  'Gymnasie Åk 1 (BA25)',
+  'Gymnasie Åk 2 (BA24)',
+  'Gymnasie Åk 3 (BA23)',
+  'Lärlingar / APL',
+  'Osorterad / Allmän',
+];
+
+/**
+ * Rank-based authorization check:
+ * - ADMIN: can edit ALL accounts (Admin, Teacher, Student)
+ * - TEACHER: can edit accounts strictly below their rank (Student only)
+ * - STUDENT: cannot edit any account details
+ */
+export function canEditUser(actor: UserAccount | null | undefined, target: UserAccount): boolean {
+  if (!actor) return false;
+  if (actor.role === 'ADMIN') return true;
+  if (actor.role === 'TEACHER') {
+    return target.role === 'STUDENT';
+  }
+  return false;
+}
+
+/**
+ * Check if the actor can delete the target user
+ */
+export function canDeleteUser(actor: UserAccount | null | undefined, target: UserAccount): boolean {
+  if (!actor) return false;
+  // Nobody can delete the primary system administrator
+  if (target.id === 'usr_admin_main' || target.email.toLowerCase() === 'admin@faltkoll.se') {
+    return false;
+  }
+  if (actor.role === 'ADMIN') return true;
+  if (actor.role === 'TEACHER') {
+    return target.role === 'STUDENT';
+  }
+  return false;
+}
 
 /**
  * Normalizes email or identifier for safe and consistent lookups
@@ -151,6 +194,83 @@ export async function deleteUserFromCloud(userId: string, email?: string): Promi
     return true;
   } catch (err) {
     console.warn('Could not delete user from Firestore:', err);
+    return false;
+  }
+}
+
+/**
+ * Saves or updates a teacher exercise in Google Cloud Firestore.
+ */
+export async function saveExerciseToCloud(exercise: TeacherExercise): Promise<boolean> {
+  try {
+    const cleanId = exercise.id || `ex_${Date.now()}`;
+    const cleanCode = (exercise.code || 'FK-' + Math.floor(1000 + Math.random() * 9000)).trim().toUpperCase();
+
+    const cleanEx: TeacherExercise = {
+      ...exercise,
+      id: cleanId,
+      code: cleanCode,
+      title: String(exercise.title || '').trim(),
+      updatedAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
+    };
+
+    // Save primary document by ID
+    const primaryRef = doc(db, EXERCISES_COLLECTION, cleanId);
+    await setDoc(primaryRef, cleanEx, { merge: true });
+
+    // Save secondary lookup by Code
+    const codeSafeKey = `code_${cleanCode.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+    const codeRef = doc(db, EXERCISES_COLLECTION, codeSafeKey);
+    await setDoc(codeRef, cleanEx, { merge: true });
+
+    return true;
+  } catch (err) {
+    console.warn('Could not save exercise to Firestore:', err);
+    return false;
+  }
+}
+
+/**
+ * Fetches all teacher exercises from Google Cloud Firestore.
+ */
+export async function fetchAllExercisesFromCloud(): Promise<TeacherExercise[]> {
+  try {
+    const colRef = collection(db, EXERCISES_COLLECTION);
+    const snap = await getDocs(colRef);
+    const exercises: TeacherExercise[] = [];
+    const seen = new Set<string>();
+
+    snap.forEach((docSnap) => {
+      const data = docSnap.data() as TeacherExercise;
+      if (data && data.id && data.title && data.code) {
+        if (!seen.has(data.id)) {
+          seen.add(data.id);
+          exercises.push(data);
+        }
+      }
+    });
+
+    return exercises;
+  } catch (err) {
+    console.warn('Could not fetch exercises from Firestore:', err);
+    return [];
+  }
+}
+
+/**
+ * Deletes an exercise from Google Cloud Firestore.
+ */
+export async function deleteExerciseFromCloud(exerciseId: string, code?: string): Promise<boolean> {
+  try {
+    await deleteDoc(doc(db, EXERCISES_COLLECTION, exerciseId));
+    if (code) {
+      const cleanCode = code.trim().toUpperCase();
+      const codeSafeKey = `code_${cleanCode.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+      await deleteDoc(doc(db, EXERCISES_COLLECTION, codeSafeKey));
+    }
+    return true;
+  } catch (err) {
+    console.warn('Could not delete exercise from Firestore:', err);
     return false;
   }
 }

@@ -146,6 +146,10 @@ export interface TeacherExercise {
   links: ExerciseLink[];
   customMoments: MomentDefinition[]; // Alla anpassade moment för denna specifika övning
   instructions?: string;
+  targetGroup?: string; // T.ex. "Alla grupper", "Byggprogrammet BA24", "Anläggare", "Vuxenutbildning"
+  difficulty?: 'GRUNDLÄGGANDE' | 'MEDEL' | 'AVANCERAD';
+  requirePhotos?: boolean;
+  phasesIncluded?: number[];
   fieldMeasurements?: {
     sideA?: number;
     sideB?: number;
@@ -199,6 +203,7 @@ export interface UserAccount {
   role: UserRole;
   password?: string;
   schoolOrCompany?: string;
+  studentGroup?: string; // T.ex. "Byggprogrammet BA24", "Anläggning & Maskin", "Vuxenutbildning (VUX)", "Gymnasie BA25"
   createdAt: string;
   lastLogin?: string;
 }

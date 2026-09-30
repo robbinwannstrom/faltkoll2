@@ -61,7 +61,10 @@ export const ChecklistView: React.FC<ChecklistViewProps> = ({
   onOpenRevisions,
   onOpenTutorial,
 }) => {
-  const relevantMoments = ALL_MOMENTS.filter((m) => m.projectType === project.projectType);
+  const relevantMoments =
+    project.customMoments && project.customMoments.length > 0
+      ? project.customMoments
+      : ALL_MOMENTS.filter((m) => m.projectType === project.projectType);
   const typeInfo = PROJECT_TYPE_LABELS[project.projectType];
 
   // Distinct phases in chronological order

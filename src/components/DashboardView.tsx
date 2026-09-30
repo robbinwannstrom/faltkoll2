@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Project, ProjectType, UserSettings } from '../types';
+import { Project, ProjectType, UserSettings, UserAccount } from '../types';
 import { ALL_MOMENTS, PROJECT_TYPE_LABELS } from '../data/momentsData';
 import { getDeletedProjects } from '../db/indexedDb';
 import {
@@ -15,6 +15,7 @@ import {
   Clock,
   ArrowRight,
   QrCode,
+  BookOpen,
 } from 'lucide-react';
 
 interface DashboardViewProps {
@@ -29,6 +30,8 @@ interface DashboardViewProps {
   onOpenAPKExport?: () => void;
   onOpenQRCodeModal?: () => void;
   onOpenTutorial?: (projectId?: string) => void;
+  onOpenExerciseCreator?: () => void;
+  currentUser?: UserAccount | null;
   userSettings?: UserSettings;
 }
 
@@ -44,6 +47,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onOpenAPKExport,
   onOpenQRCodeModal,
   onOpenTutorial,
+  onOpenExerciseCreator,
+  currentUser,
   userSettings,
 }) => {
   const [deletedCount, setDeletedCount] = useState<number>(0);
@@ -69,7 +74,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   }, [projects]);
 
   const getProjectStats = (project: Project) => {
-    const totalMoments = ALL_MOMENTS.filter((m) => m.projectType === project.projectType).length;
+    const totalMoments = (project.customMoments && project.customMoments.length > 0)
+      ? project.customMoments.length
+      : ALL_MOMENTS.filter((m) => m.projectType === project.projectType).length;
     const completedMoments = Object.values(project.moments).filter((m) => m.status === 'GREEN').length;
     const inProgressMoments = Object.values(project.moments).filter((m) => m.status === 'YELLOW').length;
     const percent = totalMoments > 0 ? Math.round((completedMoments / totalMoments) * 100) : 0;
@@ -121,6 +128,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
         {/* Action-knappar i toppen */}
         <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+          {/* Lärarpanel: Övningskreatör */}
+          {(currentUser?.role === 'TEACHER' || currentUser?.role === 'ADMIN') && onOpenExerciseCreator && (
+            <button
+              type="button"
+              onClick={onOpenExerciseCreator}
+              className="min-h-[48px] px-4 bg-[#1e1e1e] hover:bg-[#282828] text-orange-400 hover:text-orange-300 border border-orange-500/40 font-bold text-xs sm:text-sm rounded-2xl flex items-center gap-2 cursor-pointer transition-all shadow-sm"
+              title="Skapa och anpassa övningar för dina elever"
+            >
+              <BookOpen className="w-4 h-4 stroke-[2.5]" />
+              <span>Övningskreatör</span>
+            </button>
+          )}
+
           {/* Papperskorg */}
           {onOpenTrashBin && (
             <button
